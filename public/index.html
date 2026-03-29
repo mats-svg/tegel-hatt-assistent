@@ -212,22 +212,35 @@
 </header>
 
 <main id="main">
-  <!-- Fylls av JS -->
+  <div class="login-ruta" style="color:#bbb;font-size:0.9rem;">Laddar...</div>
 </main>
 
 <script>
   async function kollStatus() {
-    const res = await fetch('/api/status');
-    const { inloggad } = await res.json();
     const dot = document.getElementById('status-dot');
     const text = document.getElementById('status-text');
-    if (inloggad) {
-      dot.classList.add('inloggad');
-      text.textContent = 'Ansluten till Google';
-      visaAssistent();
-    } else {
-      text.textContent = 'Inte inloggad';
-      visaLogin();
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch('/api/status', { signal: controller.signal });
+      clearTimeout(timeout);
+      const { inloggad } = await res.json();
+      if (inloggad) {
+        dot.classList.add('inloggad');
+        text.textContent = 'Ansluten till Google';
+        visaAssistent();
+      } else {
+        text.textContent = 'Inte inloggad';
+        visaLogin();
+      }
+    } catch (e) {
+      text.textContent = 'Anslutningsfel';
+      document.getElementById('main').innerHTML = `
+        <div class="login-ruta">
+          <h2>Kunde inte ansluta</h2>
+          <p style="color:#666;line-height:1.6;margin-bottom:24px;">Kontrollera internetanslutningen och försök igen.</p>
+          <button class="btn" onclick="kollStatus()">Försök igen</button>
+        </div>`;
     }
   }
 

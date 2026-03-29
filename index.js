@@ -35,12 +35,16 @@ function saveTokens(tokens) {
 }
 
 function getAuthClient() {
-  const auth = getOAuth2Client();
-  // I molnet: använd refresh_token från env
+  // I molnet: skapa klient utan redirect_uri (behövs ej för token-refresh)
   if (process.env.GOOGLE_REFRESH_TOKEN) {
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
     auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
     return auth;
   }
+  const auth = getOAuth2Client();
   const tokens = loadTokens();
   if (!tokens) return null;
   auth.setCredentials(tokens);

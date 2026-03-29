@@ -354,14 +354,14 @@
     };
     igenkänning.onresult = (e) => {
       const input = document.getElementById('notering-input');
+      let slutlig = '';
       let interim = '';
-      let final = '';
-      for (let i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) slutlig += e.results[i][0].transcript;
         else interim += e.results[i][0].transcript;
       }
-      input.value = (basvärde ? basvärde + ' ' : '') + final + interim;
-      if (final) basvärde = (basvärde ? basvärde + ' ' : '') + final;
+      if (slutlig) basvärde = (basvärde ? basvärde + ' ' : '') + slutlig.trim();
+      input.value = basvärde + (interim ? (basvärde ? ' ' : '') + interim : '');
     };
     igenkänning.onend = () => {
       lyssnar = false;

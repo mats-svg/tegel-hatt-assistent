@@ -360,7 +360,15 @@
         if (e.results[i].isFinal) slutlig += e.results[i][0].transcript;
         else interim += e.results[i][0].transcript;
       }
-      if (slutlig) basvärde = (basvärde ? basvärde + ' ' : '') + slutlig.trim();
+      if (slutlig) {
+        // Kolla om "spara" sades
+        if (slutlig.trim().toLowerCase() === 'spara' || slutlig.trim().toLowerCase() === 'spara.') {
+          igenkänning.stop();
+          sparaNotering();
+          return;
+        }
+        basvärde = (basvärde ? basvärde + ' ' : '') + slutlig.trim();
+      }
       input.value = basvärde + (interim ? (basvärde ? ' ' : '') + interim : '');
     };
     igenkänning.onend = () => {

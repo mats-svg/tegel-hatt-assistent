@@ -341,17 +341,27 @@
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     igenkänning = new SR();
     igenkänning.lang = 'sv-SE';
-    igenkänning.continuous = false;
-    igenkänning.interimResults = false;
+    igenkänning.continuous = true;
+    igenkänning.interimResults = true;
+
+    let basvärde = '';
 
     igenkänning.onstart = () => {
       lyssnar = true;
       document.getElementById('mikrofon-knapp').classList.add('lyssnar');
+      const input = document.getElementById('notering-input');
+      basvärde = input.value;
     };
     igenkänning.onresult = (e) => {
-      const text = e.results[0][0].transcript;
       const input = document.getElementById('notering-input');
-      input.value = (input.value ? input.value + ' ' : '') + text;
+      let interim = '';
+      let final = '';
+      for (let i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      input.value = (basvärde ? basvärde + ' ' : '') + final + interim;
+      if (final) basvärde = (basvärde ? basvärde + ' ' : '') + final;
     };
     igenkänning.onend = () => {
       lyssnar = false;

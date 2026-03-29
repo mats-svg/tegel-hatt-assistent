@@ -136,9 +136,38 @@ app.get('/api/debug', (req, res) => {
     har_client_secret: !!process.env.GOOGLE_CLIENT_SECRET,
     har_refresh_token: !!process.env.GOOGLE_REFRESH_TOKEN,
     har_anthropic: !!process.env.ANTHROPIC_API_KEY,
-    client_id_start: process.env.GOOGLE_CLIENT_ID?.slice(0, 20),
-    client_secret_start: process.env.GOOGLE_CLIENT_SECRET?.slice(0, 8),
+    client_id_längd: process.env.GOOGLE_CLIENT_ID?.length,
+    client_id_start: process.env.GOOGLE_CLIENT_ID?.slice(0, 30),
+    client_secret_längd: process.env.GOOGLE_CLIENT_SECRET?.length,
+    client_secret_start: process.env.GOOGLE_CLIENT_SECRET?.slice(0, 10),
+    refresh_token_längd: process.env.GOOGLE_REFRESH_TOKEN?.length,
+    refresh_token_start: process.env.GOOGLE_REFRESH_TOKEN?.slice(0, 10),
   });
+});
+
+app.get('/api/testauth', async (req, res) => {
+  try {
+    const https = require('https');
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+    });
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    const data = await response.json();
+    if (data.access_token) {
+      res.json({ ok: true, token_type: data.token_type, scope: data.scope });
+    } else {
+      res.json({ ok: false, fel: data });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/notes', (req, res) => res.json(loadNotes()));

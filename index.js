@@ -84,7 +84,7 @@ app.get('/callback', async (req, res) => {
 });
 
 app.get('/api/status', (req, res) => {
-  res.json({ inloggad: !!loadTokens() });
+  res.json({ inloggad: !!(loadTokens() || process.env.GOOGLE_REFRESH_TOKEN) });
 });
 
 app.get('/api/notes', (req, res) => res.json(loadNotes()));

@@ -126,6 +126,17 @@ app.get('/api/status', (req, res) => {
   res.json({ inloggad: !!(loadTokens() || process.env.GOOGLE_REFRESH_TOKEN) });
 });
 
+app.get('/api/debug', (req, res) => {
+  res.json({
+    har_client_id: !!process.env.GOOGLE_CLIENT_ID,
+    har_client_secret: !!process.env.GOOGLE_CLIENT_SECRET,
+    har_refresh_token: !!process.env.GOOGLE_REFRESH_TOKEN,
+    har_anthropic: !!process.env.ANTHROPIC_API_KEY,
+    client_id_start: process.env.GOOGLE_CLIENT_ID?.slice(0, 20),
+    client_secret_start: process.env.GOOGLE_CLIENT_SECRET?.slice(0, 8),
+  });
+});
+
 app.get('/api/notes', (req, res) => res.json(loadNotes()));
 
 app.post('/api/notes', async (req, res) => {

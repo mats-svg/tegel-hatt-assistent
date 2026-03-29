@@ -12,6 +12,7 @@ app.use(express.static('public'));
 
 const TOKENS_FILE = path.join(__dirname, 'tokens.json');
 const NOTES_FILE = path.join(__dirname, 'notes.json');
+const REMINDERS_FILE = path.join(__dirname, 'reminders.json');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -61,6 +62,44 @@ function saveNote(text) {
   return note;
 }
 
+// ── Reminders ─────────────────────────────────────────────
+function loadReminders() {
+  if (fs.existsSync(REMINDERS_FILE)) return JSON.parse(fs.readFileSync(REMINDERS_FILE, 'utf8'));
+  return [];
+}
+
+function saveReminders(reminders) {
+  fs.writeFileSync(REMINDERS_FILE, JSON.stringify(reminders, null, 2));
+}
+
+async function tolkaNoteringMedClaude(text) {
+  const nu = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' });
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 256,
+    messages: [{
+      role: 'user',
+      content: `Nuvarande tid (Stockholm): ${nu}
+
+Analysera följande notering och svara BARA med JSON, inget annat.
+
+Om noteringen innehåller en påminnelse (t.ex. "påminn mig om X kl 14", "ring Y imorgon", "glöm inte Z om 2 timmar"):
+{"typ":"påminnelse","meddelande":"<kort beskrivning av vad påminnelsen gäller>","tidpunkt":"<ISO 8601 datetime i Europe/Stockholm>"}
+
+Annars:
+{"typ":"notering"}
+
+Notering: "${text}"`
+    }]
+  });
+
+  try {
+    return JSON.parse(msg.content[0].text.trim());
+  } catch {
+    return { typ: 'notering' };
+  }
+}
+
 // ── Routes ────────────────────────────────────────────────
 app.get('/login', (req, res) => {
   const auth = getOAuth2Client();
@@ -89,11 +128,30 @@ app.get('/api/status', (req, res) => {
 
 app.get('/api/notes', (req, res) => res.json(loadNotes()));
 
-app.post('/api/notes', (req, res) => {
+app.post('/api/notes', async (req, res) => {
   const { text } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'Tom notering' });
-  res.json(saveNote(text.trim()));
+  const note = saveNote(text.trim());
+
+  // Tolka noteringen i bakgrunden
+  tolkaNoteringMedClaude(text.trim()).then(resultat => {
+    if (resultat.typ === 'påminnelse' && resultat.tidpunkt) {
+      const reminders = loadReminders();
+      reminders.push({
+        id: note.id,
+        meddelande: resultat.meddelande || text.trim(),
+        tidpunkt: resultat.tidpunkt,
+        skickad: false,
+      });
+      saveReminders(reminders);
+      console.log('Påminnelse skapad:', resultat.meddelande, '@', resultat.tidpunkt);
+    }
+  }).catch(e => console.error('Tolkningsfel:', e.message));
+
+  res.json(note);
 });
+
+app.get('/api/reminders', (req, res) => res.json(loadReminders()));
 
 app.delete('/api/notes/:id', (req, res) => {
   const notes = loadNotes().filter(n => n.id !== parseInt(req.params.id));
@@ -315,6 +373,30 @@ cron.schedule('0 16 * * *', () => körDagskoll('avslutning'), { timezone: 'Europ
 
 // Kolla möten var 5:e minut
 cron.schedule('*/5 * * * *', kollaMöten, { timezone: 'Europe/Stockholm' });
+
+// Kolla påminnelser varje minut
+cron.schedule('* * * * *', async () => {
+  const nu = new Date();
+  const reminders = loadReminders();
+  let ändrad = false;
+
+  for (const r of reminders) {
+    if (r.skickad) continue;
+    if (new Date(r.tidpunkt) <= nu) {
+      try {
+        const auth = getAuthClient();
+        if (auth) await sendBriefingEmail(auth, `🔔 Påminnelse\n\n${r.meddelande}`);
+        r.skickad = true;
+        ändrad = true;
+        console.log('Påminnelse skickad:', r.meddelande);
+      } catch (e) {
+        console.error('Fel vid påminnelse:', e.message);
+      }
+    }
+  }
+
+  if (ändrad) saveReminders(reminders);
+}, { timezone: 'Europe/Stockholm' });
 
 // ── Start ─────────────────────────────────────────────────
 app.listen(process.env.PORT || 3000, () => {

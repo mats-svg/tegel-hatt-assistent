@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tegel och Hatt — Assistent</title>
+  <link rel="stylesheet" href="https://use.typekit.net/ekp3zqm.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #f5ede0;
+      color: #000;
+      font-family: 'acumin-pro', Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      font-size: 16px;
+    }
+
+    header {
+      padding: 32px 48px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-family: 'Bodoni 72', 'Didot', Georgia, serif;
+      font-size: 1.8rem;
+      font-weight: 400;
+    }
+
+    .status {
+      font-size: 0.82rem;
+      color: #999;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #ccc;
+    }
+    .status-dot.inloggad { background: #5a9a5a; }
+
+    main {
+      max-width: 760px;
+      margin: 48px auto;
+      padding: 0 48px 80px;
+    }
+
+    .login-ruta {
+      background: #fff;
+      border-radius: 12px;
+      padding: 40px;
+      text-align: center;
+    }
+    .login-ruta h2 {
+      font-family: 'Bodoni 72', 'Didot', Georgia, serif;
+      font-size: 1.8rem;
+      font-weight: 400;
+      margin-bottom: 12px;
+    }
+    .login-ruta p { color: #666; margin-bottom: 24px; line-height: 1.6; }
+
+    .btn {
+      background: #000;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-family: 'acumin-pro', Helvetica, Arial, sans-serif;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #fd804b; }
+    .btn-sekundär {
+      background: transparent;
+      color: #555;
+      border: 1px solid #ddd;
+    }
+    .btn-sekundär:hover { border-color: #fd804b; color: #fd804b; background: transparent; }
+
+    .sektion {
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+    .sektion-rubrik {
+      font-family: 'Bodoni 72', 'Didot', Georgia, serif;
+      font-size: 1.4rem;
+      font-weight: 400;
+      margin-bottom: 20px;
+    }
+
+    /* Notering-input */
+    .notering-wrap {
+      position: relative;
+    }
+    textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 14px 16px;
+      border: 1.5px solid #e8e8e8;
+      border-radius: 8px;
+      font-family: 'acumin-pro', Helvetica, Arial, sans-serif;
+      font-size: 1rem;
+      resize: vertical;
+      background: #faf9f7;
+      transition: border-color 0.15s;
+    }
+    textarea:focus { outline: none; border-color: #000; }
+    textarea::placeholder { color: #bbb; }
+
+    .notering-knappar {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      align-items: center;
+    }
+
+    .mikrofon-knapp {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      border: 1.5px solid #ddd;
+      background: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .mikrofon-knapp:hover { border-color: #fd804b; }
+    .mikrofon-knapp.lyssnar {
+      background: #fd804b;
+      border-color: #fd804b;
+      animation: puls 1s ease infinite;
+    }
+    @keyframes puls {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+
+    /* Noteringar-lista */
+    .noteringar-lista { display: flex; flex-direction: column; gap: 10px; }
+    .notering-kort {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      background: #faf9f7;
+      border-radius: 8px;
+      border: 1px solid #eee;
+      animation: innKort 0.3s ease both;
+    }
+    @keyframes innKort {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .notering-text {
+      flex: 1;
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
+    .notering-tid {
+      font-size: 0.75rem;
+      color: #bbb;
+      margin-top: 4px;
+    }
+    .radera-knapp {
+      background: none;
+      border: none;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 2px 4px;
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .radera-knapp:hover { color: #fd804b; }
+
+    /* Briefing */
+    .briefing-knappar { display: flex; gap: 10px; }
+    .briefing-status {
+      margin-top: 16px;
+      font-size: 0.9rem;
+      color: #888;
+      min-height: 24px;
+    }
+
+    .tom-text { color: #bbb; font-size: 0.9rem; font-style: italic; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Assistent</h1>
+  <div class="status">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Kollar status...</span>
+  </div>
+</header>
+
+<main id="main">
+  <!-- Fylls av JS -->
+</main>
+
+<script>
+  async function kollStatus() {
+    const res = await fetch('/api/status');
+    const { inloggad } = await res.json();
+    const dot = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    if (inloggad) {
+      dot.classList.add('inloggad');
+      text.textContent = 'Ansluten till Google';
+      visaAssistent();
+    } else {
+      text.textContent = 'Inte inloggad';
+      visaLogin();
+    }
+  }
+
+  function visaLogin() {
+    document.getElementById('main').innerHTML = `
+      <div class="login-ruta">
+        <h2>Välkommen, Mats</h2>
+        <p>Logga in med ditt Google-konto för att ge assistenten åtkomst till din kalender och mejl.</p>
+        <a href="/login"><button class="btn">Logga in med Google</button></a>
+      </div>`;
+  }
+
+  async function visaAssistent() {
+    document.getElementById('main').innerHTML = `
+      <div class="sektion">
+        <div class="sektion-rubrik">Lägg till notering</div>
+        <div class="notering-wrap">
+          <textarea id="notering-input" placeholder="Skriv eller tala in något du vill att assistenten ska hålla koll på..."></textarea>
+        </div>
+        <div class="notering-knappar">
+          <button class="mikrofon-knapp" id="mikrofon-knapp" title="Tala in" onclick="toggleRöst()">🎙</button>
+          <button class="btn" onclick="sparaNotering()">Spara</button>
+        </div>
+      </div>
+
+      <div class="sektion">
+        <div class="sektion-rubrik">Noteringar</div>
+        <div class="noteringar-lista" id="noteringar-lista">
+          <div class="tom-text">Laddar...</div>
+        </div>
+      </div>
+
+      <div class="sektion">
+        <div class="sektion-rubrik">Morgonbriefing</div>
+        <p style="color:#666;font-size:0.9rem;line-height:1.6;margin-bottom:20px;">
+          Assistenten skickar automatiskt en briefing till mats@tegelochhatt.se varje morgon kl 07:30 —
+          baserat på din kalender, olästa mejl och noteringar här.
+        </p>
+        <div class="briefing-knappar">
+          <button class="btn" onclick="skickaBriefingNu()">Skicka briefing nu</button>
+        </div>
+        <div class="briefing-status" id="briefing-status"></div>
+      </div>`;
+
+    hämtaNoteringar();
+
+    // Enter-tangent sparar
+    document.getElementById('notering-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sparaNotering();
+    });
+  }
+
+  async function hämtaNoteringar() {
+    const res = await fetch('/api/notes');
+    const notes = await res.json();
+    const lista = document.getElementById('noteringar-lista');
+    if (!notes.length) {
+      lista.innerHTML = '<div class="tom-text">Inga noteringar ännu.</div>';
+      return;
+    }
+    lista.innerHTML = notes.map(n => `
+      <div class="notering-kort" id="note-${n.id}">
+        <div style="flex:1">
+          <div class="notering-text">${n.text}</div>
+          <div class="notering-tid">${new Date(n.skapad).toLocaleString('sv-SE', { weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
+        </div>
+        <button class="radera-knapp" onclick="raderaNotering(${n.id})">×</button>
+      </div>`).join('');
+  }
+
+  async function sparaNotering() {
+    const input = document.getElementById('notering-input');
+    const text = input.value.trim();
+    if (!text) return;
+    await fetch('/api/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    input.value = '';
+    hämtaNoteringar();
+  }
+
+  async function raderaNotering(id) {
+    await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+    document.getElementById(`note-${id}`)?.remove();
+    const lista = document.getElementById('noteringar-lista');
+    if (!lista.children.length) lista.innerHTML = '<div class="tom-text">Inga noteringar ännu.</div>';
+  }
+
+  async function skickaBriefingNu() {
+    const status = document.getElementById('briefing-status');
+    status.textContent = 'Hämtar kalender och mejl, genererar briefing...';
+    try {
+      const res = await fetch('/api/briefing', { method: 'POST' });
+      if (res.ok) {
+        status.textContent = '✓ Briefing skickad till mats@tegelochhatt.se';
+      } else {
+        const { error } = await res.json();
+        status.textContent = 'Fel: ' + error;
+      }
+    } catch (e) {
+      status.textContent = 'Något gick fel.';
+    }
+  }
+
+  // Röstinmatning
+  let igenkänning = null;
+  let lyssnar = false;
+
+  function toggleRöst() {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      alert('Din webbläsare stöder inte röstinmatning. Prova Chrome.');
+      return;
+    }
+    if (lyssnar) {
+      igenkänning?.stop();
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    igenkänning = new SR();
+    igenkänning.lang = 'sv-SE';
+    igenkänning.continuous = false;
+    igenkänning.interimResults = false;
+
+    igenkänning.onstart = () => {
+      lyssnar = true;
+      document.getElementById('mikrofon-knapp').classList.add('lyssnar');
+    };
+    igenkänning.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      const input = document.getElementById('notering-input');
+      input.value = (input.value ? input.value + ' ' : '') + text;
+    };
+    igenkänning.onend = () => {
+      lyssnar = false;
+      document.getElementById('mikrofon-knapp').classList.remove('lyssnar');
+    };
+    igenkänning.start();
+  }
+
+  kollStatus();
+</script>
+
+</body>
+</html>

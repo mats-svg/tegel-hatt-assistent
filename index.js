@@ -1,0 +1,246 @@
+require('dotenv').config();
+const express = require('express');
+const { google } = require('googleapis');
+const Anthropic = require('@anthropic-ai/sdk');
+const cron = require('node-cron');
+const fs = require('fs');
+const path = require('path');
+
+const app = express();
+app.use(express.json());
+app.use(express.static('public'));
+
+const TOKENS_FILE = path.join(__dirname, 'tokens.json');
+const NOTES_FILE = path.join(__dirname, 'notes.json');
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// ── OAuth ─────────────────────────────────────────────────
+function getOAuth2Client() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+}
+
+function loadTokens() {
+  if (fs.existsSync(TOKENS_FILE)) return JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
+  return null;
+}
+
+function saveTokens(tokens) {
+  fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2));
+}
+
+function getAuthClient() {
+  const auth = getOAuth2Client();
+  // I molnet: använd refresh_token från env
+  if (process.env.GOOGLE_REFRESH_TOKEN) {
+    auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+    return auth;
+  }
+  const tokens = loadTokens();
+  if (!tokens) return null;
+  auth.setCredentials(tokens);
+  auth.on('tokens', (newTokens) => saveTokens({ ...loadTokens(), ...newTokens }));
+  return auth;
+}
+
+// ── Notes ─────────────────────────────────────────────────
+function loadNotes() {
+  if (fs.existsSync(NOTES_FILE)) return JSON.parse(fs.readFileSync(NOTES_FILE, 'utf8'));
+  return [];
+}
+
+function saveNote(text) {
+  const notes = loadNotes();
+  const note = { id: Date.now(), text, skapad: new Date().toISOString() };
+  notes.unshift(note);
+  fs.writeFileSync(NOTES_FILE, JSON.stringify(notes, null, 2));
+  return note;
+}
+
+// ── Routes ────────────────────────────────────────────────
+app.get('/login', (req, res) => {
+  const auth = getOAuth2Client();
+  const url = auth.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/calendar.readonly',
+    ],
+  });
+  res.redirect(url);
+});
+
+app.get('/callback', async (req, res) => {
+  const auth = getOAuth2Client();
+  const { tokens } = await auth.getToken(req.query.code);
+  saveTokens(tokens);
+  res.redirect('/');
+});
+
+app.get('/api/status', (req, res) => {
+  res.json({ inloggad: !!loadTokens() });
+});
+
+app.get('/api/notes', (req, res) => res.json(loadNotes()));
+
+app.post('/api/notes', (req, res) => {
+  const { text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'Tom notering' });
+  res.json(saveNote(text.trim()));
+});
+
+app.delete('/api/notes/:id', (req, res) => {
+  const notes = loadNotes().filter(n => n.id !== parseInt(req.params.id));
+  fs.writeFileSync(NOTES_FILE, JSON.stringify(notes, null, 2));
+  res.json({ ok: true });
+});
+
+app.post('/api/briefing', async (req, res) => {
+  try {
+    await körBriefing();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Google Calendar ───────────────────────────────────────
+async function getCalendarEvents(auth) {
+  const calendar = google.calendar({ version: 'v3', auth });
+  const now = new Date();
+  const tvåDagar = new Date(now);
+  tvåDagar.setDate(tvåDagar.getDate() + 2);
+
+  const res = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: now.toISOString(),
+    timeMax: tvåDagar.toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 20,
+  });
+  return res.data.items || [];
+}
+
+// ── Gmail ─────────────────────────────────────────────────
+async function getGmailMessages(auth) {
+  const gmail = google.gmail({ version: 'v1', auth });
+  const res = await gmail.users.messages.list({
+    userId: 'me',
+    q: 'is:unread newer_than:1d',
+    maxResults: 15,
+  });
+  if (!res.data.messages) return [];
+
+  return Promise.all(res.data.messages.map(async (m) => {
+    const msg = await gmail.users.messages.get({
+      userId: 'me', id: m.id, format: 'metadata',
+      metadataHeaders: ['Subject', 'From'],
+    });
+    const h = msg.data.payload.headers;
+    return {
+      subject: h.find(x => x.name === 'Subject')?.value || '(inget ämne)',
+      from: h.find(x => x.name === 'From')?.value || '',
+      snippet: msg.data.snippet,
+    };
+  }));
+}
+
+// ── Claude ────────────────────────────────────────────────
+async function generateBriefing(events, emails, notes) {
+  const idag = new Date().toLocaleDateString('sv-SE', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  const eventsText = events.length
+    ? events.map(e => {
+        const tid = e.start?.dateTime
+          ? new Date(e.start.dateTime).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+          : 'Heldag';
+        return `- ${tid}: ${e.summary || '(namnlöst)'}`;
+      }).join('\n')
+    : 'Inga möten.';
+
+  const emailsText = emails.length
+    ? emails.map(e => `- Från: ${e.from}\n  Ämne: ${e.subject}\n  "${e.snippet}"`).join('\n')
+    : 'Inga olästa mejl.';
+
+  const notesText = notes.length
+    ? notes.slice(0, 10).map(n => `- ${n.text}`).join('\n')
+    : 'Inga noteringar.';
+
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    messages: [{
+      role: 'user',
+      content: `Du är en personlig assistent för Mats Hedman, VD och senior kreatör på designbyrån Tegel och Hatt.
+Skriv en kort, varm och personlig morgonbriefing på svenska för ${idag}.
+
+KALENDER (närmaste 48h):
+${eventsText}
+
+OLÄSTA MEJL:
+${emailsText}
+
+NOTERINGAR OCH PÅMINNELSER:
+${notesText}
+
+Håll det kortfattat — max 200 ord. Lyft det viktigaste. Avsluta med vad Mats bör prioritera idag.`
+    }]
+  });
+
+  return msg.content[0].text;
+}
+
+// ── Skicka mejl ───────────────────────────────────────────
+async function sendBriefingEmail(auth, text) {
+  const gmail = google.gmail({ version: 'v1', auth });
+  const idag = new Date().toLocaleDateString('sv-SE', { weekday: 'long', month: 'long', day: 'numeric' });
+  const tid = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+
+  const html = `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:32px;color:#222;">
+    <p style="font-size:0.85rem;color:#999;margin-bottom:24px;text-transform:uppercase;letter-spacing:0.05em;">Tegel och Hatt Assistent</p>
+    <div style="white-space:pre-wrap;line-height:1.8;font-size:1rem;">${text.replace(/\n/g, '<br>')}</div>
+    <hr style="border:none;border-top:1px solid #eee;margin:32px 0;">
+    <p style="font-size:0.78rem;color:#bbb;">Skickat ${idag} kl ${tid}</p>
+  </div>`;
+
+  const raw = Buffer.from(
+    `To: ${process.env.EMAIL_TO}\r\nSubject: Morgonbriefing — ${idag}\r\nContent-Type: text/html; charset=utf-8\r\n\r\n${html}`
+  ).toString('base64url');
+
+  await gmail.users.messages.send({ userId: 'me', requestBody: { raw } });
+}
+
+// ── Kör briefing ──────────────────────────────────────────
+async function körBriefing() {
+  const auth = getAuthClient();
+  if (!auth) { console.log('Inte inloggad'); return; }
+
+  console.log('Hämtar kalender och mejl...');
+  const [events, emails] = await Promise.all([getCalendarEvents(auth), getGmailMessages(auth)]);
+  const notes = loadNotes();
+
+  console.log('Genererar briefing...');
+  const briefing = await generateBriefing(events, emails, notes);
+
+  console.log('Skickar mejl till', process.env.EMAIL_TO);
+  await sendBriefingEmail(auth, briefing);
+  console.log('Klart!');
+}
+
+// Varje morgon 07:30
+cron.schedule('30 7 * * *', körBriefing, { timezone: 'Europe/Stockholm' });
+
+// ── Start ─────────────────────────────────────────────────
+app.listen(process.env.PORT || 3000, () => {
+  console.log('Assistent körs på http://localhost:3000');
+  if (!loadTokens()) console.log('→ Logga in: http://localhost:3000/login');
+});

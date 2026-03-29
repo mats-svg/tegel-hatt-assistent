@@ -366,8 +366,9 @@
         else interim += e.results[i][0].transcript;
       }
       if (slutlig) {
-        // Kolla om "spara" sades
-        if (slutlig.trim().toLowerCase() === 'spara' || slutlig.trim().toLowerCase() === 'spara.') {
+        // Kolla om "spara" sades (sista ordet, med eller utan punkt/komma)
+        const sista = slutlig.trim().toLowerCase().replace(/[.,!?\s]+$/, '').split(/\s+/).pop();
+        if (sista === 'spara') {
           igenkänning.stop();
           sparaNotering();
           return;

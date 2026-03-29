@@ -236,8 +236,85 @@ async function körBriefing() {
   console.log('Klart!');
 }
 
+// ── Dagliga checks ────────────────────────────────────────
+async function körDagskoll(typ) {
+  const auth = getAuthClient();
+  if (!auth) return;
+
+  const events = await getCalendarEvents(auth);
+  const emails = await getGmailMessages(auth);
+  const notes = loadNotes();
+
+  const idag = new Date().toLocaleDateString('sv-SE', { weekday: 'long', month: 'long', day: 'numeric' });
+  const prompt = typ === 'lunch'
+    ? `Det är lunch. Ge Mats en kort koll (max 100 ord) på vad som händer i eftermiddag och om det finns viktiga mejl att agera på. Datum: ${idag}.
+
+KALENDER:\n${events.map(e => `- ${e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('sv-SE', {hour:'2-digit',minute:'2-digit'}) : 'Heldag'}: ${e.summary}`).join('\n') || 'Inga fler möten idag.'}
+
+OLÄSTA MEJL:\n${emails.slice(0,5).map(e => `- ${e.from}: ${e.subject}`).join('\n') || 'Inga.'}`
+    : `Det är 16.00. Ge Mats en kort avslutningskoll (max 100 ord): vad är kvar idag, och finns det noteringar att agera på? Datum: ${idag}.
+
+KALENDER:\n${events.map(e => `- ${e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('sv-SE', {hour:'2-digit',minute:'2-digit'}) : 'Heldag'}: ${e.summary}`).join('\n') || 'Inga fler möten.'}
+
+NOTERINGAR:\n${notes.slice(0,5).map(n => `- ${n.text}`).join('\n') || 'Inga.'}`;
+
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 512,
+    messages: [{ role: 'user', content: `Du är Mats Hedmans personliga assistent på Tegel och Hatt. ${prompt}` }]
+  });
+
+  await sendBriefingEmail(auth, msg.content[0].text);
+  console.log(`${typ}-koll skickad`);
+}
+
+// ── Mötes-påminnelser ─────────────────────────────────────
+const skickadePåminnelser = new Set();
+
+async function kollaMöten() {
+  const auth = getAuthClient();
+  if (!auth) return;
+
+  const calendar = google.calendar({ version: 'v3', auth });
+  const nu = new Date();
+  const om20 = new Date(nu.getTime() + 20 * 60000);
+  const om10 = new Date(nu.getTime() + 10 * 60000);
+
+  const res = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: om10.toISOString(),
+    timeMax: om20.toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 5,
+  });
+
+  for (const event of res.data.items || []) {
+    const nyckel = event.id + '_' + event.start.dateTime;
+    if (skickadePåminnelser.has(nyckel)) continue;
+
+    skickadePåminnelser.add(nyckel);
+    const tid = new Date(event.start.dateTime).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    const plats = event.location ? ` · ${event.location}` : '';
+    const deltagare = event.attendees?.length ? ` · ${event.attendees.length} deltagare` : '';
+
+    const text = `Du har ett möte om ungefär 15 minuter.\n\n📅 ${event.summary || 'Möte'}\n🕐 Kl ${tid}${plats}${deltagare}${event.description ? '\n\n' + event.description.slice(0, 200) : ''}`;
+    await sendBriefingEmail(auth, text);
+    console.log('Mötespåminnelse skickad:', event.summary);
+  }
+}
+
 // Varje morgon 07:30
 cron.schedule('30 7 * * *', körBriefing, { timezone: 'Europe/Stockholm' });
+
+// Lunchkoll 12:00
+cron.schedule('0 12 * * *', () => körDagskoll('lunch'), { timezone: 'Europe/Stockholm' });
+
+// Avslutningskoll 16:00
+cron.schedule('0 16 * * *', () => körDagskoll('avslutning'), { timezone: 'Europe/Stockholm' });
+
+// Kolla möten var 5:e minut
+cron.schedule('*/5 * * * *', kollaMöten, { timezone: 'Europe/Stockholm' });
 
 // ── Start ─────────────────────────────────────────────────
 app.listen(process.env.PORT || 3000, () => {

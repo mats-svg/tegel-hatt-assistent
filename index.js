@@ -471,8 +471,11 @@ async function kollaMöten() {
 
     skickadePåminnelser.add(nyckel);
     const startDt = new Date(event.start.dateTime);
+    const idag = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+    const möteDag = startDt.toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+    if (möteDag !== idag) continue;
+
     const tid = startDt.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
-    const datum = startDt.toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Europe/Stockholm' });
     const plats = event.location ? ` · ${event.location}` : '';
 
     const text = `Möte om 15 min: ${event.summary || 'Möte'} — ${datum} kl ${tid}${plats}`;

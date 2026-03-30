@@ -90,6 +90,9 @@ Analysera följande notering och svara BARA med JSON, inget annat.
 Om noteringen är en begäran om att skicka ett mejl (t.ex. "skicka ett mejl till X om Y", "maila anna@exempel.se att..."):
 {"typ":"mejl","till":"<e-postadress>","ämne":"<kort ämnesrad>","brödtext":"<mejlets innehåll, skrivet som ett professionellt mejl från Mats Hedman på Tegel och Hatt>"}
 
+Om noteringen är en begäran om att lägga till ett möte eller en händelse i kalendern (t.ex. "boka möte med X på fredag kl 10", "lägg in lunch med Anna måndag kl 12"):
+{"typ":"kalender","sammanfattning":"<händelsens titel>","start":"<ISO 8601 datetime i Europe/Stockholm>","slut":"<ISO 8601 datetime, normalt 1 timme efter start>","plats":"<plats om angiven, annars null>"}
+
 Om noteringen innehåller en påminnelse (t.ex. "påminn mig om X kl 14", "ring Y imorgon", "glöm inte Z om 2 timmar"):
 {"typ":"påminnelse","meddelande":"<kort beskrivning av vad påminnelsen gäller>","tidpunkt":"<ISO 8601 datetime i Europe/Stockholm>"}
 
@@ -105,6 +108,19 @@ Notering: "${text}"`
   } catch {
     return { typ: 'notering' };
   }
+}
+
+async function skapaKalenderhändelse(auth, sammanfattning, start, slut, plats, beskrivning) {
+  const calendar = google.calendar({ version: 'v3', auth });
+  const event = {
+    summary: sammanfattning,
+    start: { dateTime: start, timeZone: 'Europe/Stockholm' },
+    end:   { dateTime: slut,  timeZone: 'Europe/Stockholm' },
+  };
+  if (plats) event.location = plats;
+  if (beskrivning) event.description = beskrivning;
+  await calendar.events.insert({ calendarId: 'primary', requestBody: event });
+  console.log('Kalenderhändelse skapad:', sammanfattning, start);
 }
 
 async function skickaMailViaClaude(auth, till, ämne, brödtext) {
@@ -126,6 +142,7 @@ app.get('/login', (req, res) => {
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/calendar.events',
     ],
   });
   res.redirect(url);
@@ -206,6 +223,13 @@ app.post('/api/notes', async (req, res) => {
       if (auth) {
         await skickaMailViaClaude(auth, resultat.till, resultat.ämne || '(inget ämne)', resultat.brödtext || text.trim());
         await sendSMS(`Mejl skickat till ${resultat.till}: "${resultat.ämne}"`);
+      }
+    } else if (resultat.typ === 'kalender' && resultat.start) {
+      const auth = getAuthClient();
+      if (auth) {
+        await skapaKalenderhändelse(auth, resultat.sammanfattning, resultat.start, resultat.slut, resultat.plats, null);
+        const tid = new Date(resultat.start).toLocaleString('sv-SE', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
+        await sendSMS(`Inlagt i kalendern: ${resultat.sammanfattning} — ${tid}`);
       }
     }
   }).catch(e => console.error('Tolkningsfel:', e.message));

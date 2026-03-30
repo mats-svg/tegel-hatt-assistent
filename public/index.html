@@ -344,31 +344,21 @@
   // Röstinmatning
   let igenkänning = null;
   let lyssnar = false;
+  let basvärde = '';
+  let sparaVäntar = false;
 
-  function toggleRöst() {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      alert('Din webbläsare stöder inte röstinmatning. Prova Chrome.');
-      return;
-    }
-    if (lyssnar) {
-      igenkänning?.stop();
-      return;
-    }
+  function startaIgenkänning() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     igenkänning = new SR();
     igenkänning.lang = 'sv-SE';
-    igenkänning.continuous = true;
+    igenkänning.continuous = false;
     igenkänning.interimResults = true;
 
-    let basvärde = '';
-
     igenkänning.onstart = () => {
-      lyssnar = true;
       document.getElementById('mikrofon-knapp').classList.add('lyssnar');
       document.getElementById('mikrofon-knapp').textContent = 'Lyssnar...';
-      const input = document.getElementById('notering-input');
-      basvärde = input.value;
     };
+
     igenkänning.onresult = (e) => {
       const input = document.getElementById('notering-input');
       let slutlig = '';
@@ -378,23 +368,51 @@
         else interim += e.results[i][0].transcript;
       }
       if (slutlig) {
-        // Kolla om "spara" sades (sista ordet, med eller utan punkt/komma)
         const sista = slutlig.trim().toLowerCase().replace(/[.,!?\s]+$/, '').split(/\s+/).pop();
         if (sista === 'spara') {
+          sparaVäntar = true;
           igenkänning.stop();
-          sparaNotering();
           return;
         }
         basvärde = (basvärde ? basvärde + ' ' : '') + slutlig.trim();
       }
       input.value = basvärde + (interim ? (basvärde ? ' ' : '') + interim : '');
     };
+
     igenkänning.onend = () => {
-      lyssnar = false;
-      document.getElementById('mikrofon-knapp').classList.remove('lyssnar');
-      document.getElementById('mikrofon-knapp').textContent = 'Prata';
+      if (sparaVäntar) {
+        sparaVäntar = false;
+        lyssnar = false;
+        document.getElementById('mikrofon-knapp').classList.remove('lyssnar');
+        document.getElementById('mikrofon-knapp').textContent = 'Prata';
+        sparaNotering();
+        return;
+      }
+      // Starta om automatiskt på iOS (stöder ej continuous)
+      if (lyssnar) {
+        setTimeout(() => { if (lyssnar) igenkänning.start(); }, 100);
+      } else {
+        document.getElementById('mikrofon-knapp').classList.remove('lyssnar');
+        document.getElementById('mikrofon-knapp').textContent = 'Prata';
+      }
     };
+
     igenkänning.start();
+  }
+
+  function toggleRöst() {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      alert('Din webbläsare stöder inte röstinmatning. Prova Chrome.');
+      return;
+    }
+    if (lyssnar) {
+      lyssnar = false;
+      igenkänning?.stop();
+      return;
+    }
+    lyssnar = true;
+    basvärde = document.getElementById('notering-input').value;
+    startaIgenkänning();
   }
 
   kollStatus();

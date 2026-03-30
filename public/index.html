@@ -142,8 +142,9 @@
     }
     .mikrofon-knapp:hover { border-color: #fd804b; }
     .mikrofon-knapp.lyssnar {
-      background: #fd804b;
-      border-color: #fd804b;
+      background: #fd804b !important;
+      border-color: #fd804b !important;
+      color: #fff !important;
       animation: puls 1s ease infinite;
     }
     @keyframes puls {
@@ -257,14 +258,11 @@
     document.getElementById('main').innerHTML = `
       <div class="sektion">
         <div class="sektion-rubrik">Lägg till notering</div>
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <button class="mikrofon-knapp" id="mikrofon-knapp" title="Tala in" onclick="toggleRöst()">🎙</button>
-          <span id="röst-status" style="font-size:0.85rem;color:#bbb;">Tryck för att tala</span>
-        </div>
         <div class="notering-wrap">
-          <textarea id="notering-input" placeholder="Eller skriv här..."></textarea>
+          <textarea id="notering-input" placeholder="Skriv eller tala in något..."></textarea>
         </div>
         <div class="notering-knappar">
+          <button class="btn btn-sekundär" id="mikrofon-knapp" onclick="toggleRöst()">Prata</button>
           <button class="btn" onclick="sparaNotering()">Spara</button>
         </div>
       </div>
@@ -367,8 +365,7 @@
     igenkänning.onstart = () => {
       lyssnar = true;
       document.getElementById('mikrofon-knapp').classList.add('lyssnar');
-      const status = document.getElementById('röst-status');
-      if (status) status.textContent = 'Lyssnar...';
+      document.getElementById('mikrofon-knapp').textContent = 'Lyssnar...';
       const input = document.getElementById('notering-input');
       basvärde = input.value;
     };
@@ -395,8 +392,7 @@
     igenkänning.onend = () => {
       lyssnar = false;
       document.getElementById('mikrofon-knapp').classList.remove('lyssnar');
-      const status = document.getElementById('röst-status');
-      if (status) status.textContent = 'Tryck för att tala';
+      document.getElementById('mikrofon-knapp').textContent = 'Prata';
     };
     igenkänning.start();
   }

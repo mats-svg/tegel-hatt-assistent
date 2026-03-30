@@ -80,12 +80,15 @@ async function tolkaNoteringMedClaude(text) {
   const nu = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' });
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 256,
+    max_tokens: 512,
     messages: [{
       role: 'user',
       content: `Nuvarande tid (Stockholm): ${nu}
 
 Analysera följande notering och svara BARA med JSON, inget annat.
+
+Om noteringen är en begäran om att skicka ett mejl (t.ex. "skicka ett mejl till X om Y", "maila anna@exempel.se att..."):
+{"typ":"mejl","till":"<e-postadress>","ämne":"<kort ämnesrad>","brödtext":"<mejlets innehåll, skrivet som ett professionellt mejl från Mats Hedman på Tegel och Hatt>"}
 
 Om noteringen innehåller en påminnelse (t.ex. "påminn mig om X kl 14", "ring Y imorgon", "glöm inte Z om 2 timmar"):
 {"typ":"påminnelse","meddelande":"<kort beskrivning av vad påminnelsen gäller>","tidpunkt":"<ISO 8601 datetime i Europe/Stockholm>"}
@@ -102,6 +105,15 @@ Notering: "${text}"`
   } catch {
     return { typ: 'notering' };
   }
+}
+
+async function skickaMailViaClaude(auth, till, ämne, brödtext) {
+  const gmail = google.gmail({ version: 'v1', auth });
+  const raw = Buffer.from(
+    `To: ${till}\r\nSubject: ${ämne}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${brödtext}`
+  ).toString('base64url');
+  await gmail.users.messages.send({ userId: 'me', requestBody: { raw } });
+  console.log('Mejl skickat till', till);
 }
 
 // ── Routes ────────────────────────────────────────────────
@@ -178,7 +190,7 @@ app.post('/api/notes', async (req, res) => {
   const note = saveNote(text.trim());
 
   // Tolka noteringen i bakgrunden
-  tolkaNoteringMedClaude(text.trim()).then(resultat => {
+  tolkaNoteringMedClaude(text.trim()).then(async resultat => {
     if (resultat.typ === 'påminnelse' && resultat.tidpunkt) {
       const reminders = loadReminders();
       reminders.push({
@@ -189,6 +201,12 @@ app.post('/api/notes', async (req, res) => {
       });
       saveReminders(reminders);
       console.log('Påminnelse skapad:', resultat.meddelande, '@', resultat.tidpunkt);
+    } else if (resultat.typ === 'mejl' && resultat.till) {
+      const auth = getAuthClient();
+      if (auth) {
+        await skickaMailViaClaude(auth, resultat.till, resultat.ämne || '(inget ämne)', resultat.brödtext || text.trim());
+        await sendSMS(`Mejl skickat till ${resultat.till}: "${resultat.ämne}"`);
+      }
     }
   }).catch(e => console.error('Tolkningsfel:', e.message));
 

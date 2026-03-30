@@ -492,6 +492,49 @@ cron.schedule('0 16 * * *', () => körDagskoll('avslutning'), { timezone: 'Europ
 // Kolla möten var 5:e minut
 cron.schedule('*/5 * * * *', kollaMöten, { timezone: 'Europe/Stockholm' });
 
+// ── Bevaka mejl från specifika avsändare ──────────────────
+const kolladeMailIds = new Set();
+
+async function kollaBevakedeMejl() {
+  const auth = getAuthClient();
+  if (!auth) return;
+  const gmail = google.gmail({ version: 'v1', auth });
+
+  const res = await gmail.users.messages.list({
+    userId: 'me',
+    q: 'from:Johanna Karlsson is:unread newer_than:1d',
+    maxResults: 10,
+  });
+  if (!res.data.messages) return;
+
+  for (const m of res.data.messages) {
+    if (kolladeMailIds.has(m.id)) continue;
+    kolladeMailIds.add(m.id);
+
+    const msg = await gmail.users.messages.get({
+      userId: 'me', id: m.id, format: 'full',
+    });
+    const headers = msg.data.payload.headers;
+    const från = headers.find(h => h.name === 'From')?.value || '';
+    if (!från.toLowerCase().includes('johanna')) continue;
+
+    const snippet = msg.data.snippet || '';
+    const check = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 64,
+      messages: [{ role: 'user', content: `Innehåller följande mejl en fråga? Svara bara "ja" eller "nej".\n\n"${snippet}"` }],
+    });
+    if (check.content[0].text.trim().toLowerCase().startsWith('ja')) {
+      const ämne = headers.find(h => h.name === 'Subject')?.value || '(inget ämne)';
+      await sendSMS(`Fråga från Johanna Karlsson: "${ämne}" — ${snippet.slice(0, 100)}`);
+      console.log('Notis skickad: fråga från Johanna Karlsson');
+    }
+  }
+}
+
+// Kolla Johannas mejl var 10:e minut
+cron.schedule('*/10 * * * *', kollaBevakedeMejl, { timezone: 'Europe/Stockholm' });
+
 // Kolla påminnelser varje minut
 cron.schedule('* * * * *', async () => {
   const nu = new Date();

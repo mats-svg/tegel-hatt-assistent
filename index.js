@@ -201,6 +201,12 @@ app.get('/api/testauth', async (req, res) => {
   }
 });
 
+app.get('/assistenten.shortcut', (req, res) => {
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', 'attachment; filename="Assistenten.shortcut"');
+  res.sendFile(path.join(__dirname, 'public', 'assistenten.shortcut'));
+});
+
 app.get('/api/notes', (req, res) => res.json(loadNotes()));
 
 // Endpoint för iOS Genvägar (GET med text som query-param)

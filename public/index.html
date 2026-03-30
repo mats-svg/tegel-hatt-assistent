@@ -285,8 +285,12 @@
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sparaNotering();
     });
 
-    // Starta mikrofonen automatiskt
-    setTimeout(() => toggleRöst(), 400);
+    // Be om mikrofontillstånd direkt så iOS minns det
+    if (navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => stream.getTracks().forEach(t => t.stop()))
+        .catch(() => {});
+    }
   }
 
   async function hämtaNoteringar() {

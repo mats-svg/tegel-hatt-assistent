@@ -257,13 +257,13 @@ async function getGmailMessages(auth) {
 // ── Claude ────────────────────────────────────────────────
 async function generateBriefing(events, emails, notes) {
   const idag = new Date().toLocaleDateString('sv-SE', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Stockholm'
   });
 
   const eventsText = events.length
     ? events.map(e => {
         const tid = e.start?.dateTime
-          ? new Date(e.start.dateTime).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+          ? new Date(e.start.dateTime).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' })
           : 'Heldag';
         return `- ${tid}: ${e.summary || '(namnlöst)'}`;
       }).join('\n')
@@ -334,8 +334,8 @@ async function sendSMS(text) {
 // ── Skicka mejl ───────────────────────────────────────────
 async function sendBriefingEmail(auth, text) {
   const gmail = google.gmail({ version: 'v1', auth });
-  const idag = new Date().toLocaleDateString('sv-SE', { weekday: 'long', month: 'long', day: 'numeric' });
-  const tid = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+  const idag = new Date().toLocaleDateString('sv-SE', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Europe/Stockholm' });
+  const tid = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
 
   const html = `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;padding:32px;color:#222;">
     <p style="font-size:0.85rem;color:#999;margin-bottom:24px;text-transform:uppercase;letter-spacing:0.05em;">Tegel och Hatt Assistent</p>
@@ -377,16 +377,16 @@ async function körDagskoll(typ) {
   const emails = await getGmailMessages(auth);
   const notes = loadNotes();
 
-  const idag = new Date().toLocaleDateString('sv-SE', { weekday: 'long', month: 'long', day: 'numeric' });
+  const idag = new Date().toLocaleDateString('sv-SE', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Europe/Stockholm' });
   const prompt = typ === 'lunch'
     ? `Det är lunch. Ge Mats en kort koll (max 100 ord) på vad som händer i eftermiddag och om det finns viktiga mejl att agera på. Datum: ${idag}.
 
-KALENDER:\n${events.map(e => `- ${e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('sv-SE', {hour:'2-digit',minute:'2-digit'}) : 'Heldag'}: ${e.summary}`).join('\n') || 'Inga fler möten idag.'}
+KALENDER:\n${events.map(e => `- ${e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('sv-SE', {hour:'2-digit',minute:'2-digit', timeZone:'Europe/Stockholm'}) : 'Heldag'}: ${e.summary}`).join('\n') || 'Inga fler möten idag.'}
 
 OLÄSTA MEJL:\n${emails.slice(0,5).map(e => `- ${e.from}: ${e.subject}`).join('\n') || 'Inga.'}`
     : `Det är 16.00. Ge Mats en kort avslutningskoll (max 100 ord): vad är kvar idag, och finns det noteringar att agera på? Datum: ${idag}.
 
-KALENDER:\n${events.map(e => `- ${e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('sv-SE', {hour:'2-digit',minute:'2-digit'}) : 'Heldag'}: ${e.summary}`).join('\n') || 'Inga fler möten.'}
+KALENDER:\n${events.map(e => `- ${e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('sv-SE', {hour:'2-digit',minute:'2-digit', timeZone:'Europe/Stockholm'}) : 'Heldag'}: ${e.summary}`).join('\n') || 'Inga fler möten.'}
 
 NOTERINGAR:\n${notes.slice(0,5).map(n => `- ${n.text}`).join('\n') || 'Inga.'}`;
 
@@ -426,7 +426,7 @@ async function kollaMöten() {
     if (skickadePåminnelser.has(nyckel)) continue;
 
     skickadePåminnelser.add(nyckel);
-    const tid = new Date(event.start.dateTime).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    const tid = new Date(event.start.dateTime).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
     const plats = event.location ? ` · ${event.location}` : '';
     const deltagare = event.attendees?.length ? ` · ${event.attendees.length} deltagare` : '';
 

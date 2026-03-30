@@ -203,6 +203,27 @@ app.get('/api/testauth', async (req, res) => {
 
 app.get('/api/notes', (req, res) => res.json(loadNotes()));
 
+// Endpoint för iOS Genvägar (GET med text som query-param)
+app.get('/api/quick-note', async (req, res) => {
+  const text = req.query.text?.trim();
+  if (!text) return res.status(400).send('Ingen text');
+  const note = saveNote(text);
+  tolkaNoteringMedClaude(text).then(async resultat => {
+    if (resultat.typ === 'påminnelse' && resultat.tidpunkt) {
+      const reminders = loadReminders();
+      reminders.push({ id: note.id, meddelande: resultat.meddelande || text, tidpunkt: resultat.tidpunkt, skickad: false });
+      saveReminders(reminders);
+    } else if (resultat.typ === 'mejl' && resultat.till) {
+      const auth = getAuthClient();
+      if (auth) { await skickaMailViaClaude(auth, resultat.till, resultat.ämne || '(inget ämne)', resultat.brödtext || text); await sendSMS(`Mejl skickat till ${resultat.till}: "${resultat.ämne}"`); }
+    } else if (resultat.typ === 'kalender' && resultat.start) {
+      const auth = getAuthClient();
+      if (auth) { await skapaKalenderhändelse(auth, resultat.sammanfattning, resultat.start, resultat.slut, resultat.plats, null); const tid = new Date(resultat.start).toLocaleString('sv-SE', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' }); await sendSMS(`Inlagt i kalendern: ${resultat.sammanfattning} — ${tid}`); }
+    }
+  }).catch(e => console.error('Tolkningsfel:', e.message));
+  res.send('OK');
+});
+
 app.post('/api/notes', async (req, res) => {
   const { text } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'Tom notering' });

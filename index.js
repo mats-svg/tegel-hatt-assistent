@@ -301,6 +301,36 @@ Håll det kortfattat — max 200 ord. Lyft det viktigaste. Avsluta med vad Mats 
   return msg.content[0].text;
 }
 
+// ── Skicka SMS via 46elks ─────────────────────────────────
+async function sendSMS(text) {
+  const user = process.env.ELKS_USERNAME;
+  const pass = process.env.ELKS_PASSWORD;
+  const to   = process.env.SMS_TO;
+  if (!user || !pass || !to) {
+    console.log('SMS ej konfigurerat, hoppar över.');
+    return;
+  }
+  const params = new URLSearchParams({
+    from: 'Assistent',
+    to,
+    message: text.slice(0, 160),
+  });
+  const res = await fetch('https://api.46elks.com/a1/sms', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64'),
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
+  });
+  const data = await res.json();
+  if (data.status === 'created') {
+    console.log('SMS skickat till', to);
+  } else {
+    console.error('SMS-fel:', JSON.stringify(data));
+  }
+}
+
 // ── Skicka mejl ───────────────────────────────────────────
 async function sendBriefingEmail(auth, text) {
   const gmail = google.gmail({ version: 'v1', auth });
@@ -366,7 +396,7 @@ NOTERINGAR:\n${notes.slice(0,5).map(n => `- ${n.text}`).join('\n') || 'Inga.'}`;
     messages: [{ role: 'user', content: `Du är Mats Hedmans personliga assistent på Tegel och Hatt. ${prompt}` }]
   });
 
-  await sendBriefingEmail(auth, msg.content[0].text);
+  await sendSMS(msg.content[0].text);
   console.log(`${typ}-koll skickad`);
 }
 
@@ -400,8 +430,8 @@ async function kollaMöten() {
     const plats = event.location ? ` · ${event.location}` : '';
     const deltagare = event.attendees?.length ? ` · ${event.attendees.length} deltagare` : '';
 
-    const text = `Du har ett möte om ungefär 15 minuter.\n\n📅 ${event.summary || 'Möte'}\n🕐 Kl ${tid}${plats}${deltagare}${event.description ? '\n\n' + event.description.slice(0, 200) : ''}`;
-    await sendBriefingEmail(auth, text);
+    const text = `Möte om 15 min: ${event.summary || 'Möte'} kl ${tid}${plats}`;
+    await sendSMS(text);
     console.log('Mötespåminnelse skickad:', event.summary);
   }
 }
@@ -429,7 +459,7 @@ cron.schedule('* * * * *', async () => {
     if (new Date(r.tidpunkt) <= nu) {
       try {
         const auth = getAuthClient();
-        if (auth) await sendBriefingEmail(auth, `🔔 Påminnelse\n\n${r.meddelande}`);
+        if (auth) await sendSMS(`Påminnelse: ${r.meddelande}`);
         r.skickad = true;
         ändrad = true;
         console.log('Påminnelse skickad:', r.meddelande);

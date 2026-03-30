@@ -106,7 +106,8 @@ Notering: "${text}"`
   });
 
   try {
-    return JSON.parse(msg.content[0].text.trim());
+    const raw = msg.content[0].text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    return JSON.parse(raw);
   } catch {
     return { typ: 'notering' };
   }

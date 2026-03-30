@@ -470,11 +470,12 @@ async function kollaMöten() {
     if (skickadePåminnelser.has(nyckel)) continue;
 
     skickadePåminnelser.add(nyckel);
-    const tid = new Date(event.start.dateTime).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
+    const startDt = new Date(event.start.dateTime);
+    const tid = startDt.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
+    const datum = startDt.toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Europe/Stockholm' });
     const plats = event.location ? ` · ${event.location}` : '';
-    const deltagare = event.attendees?.length ? ` · ${event.attendees.length} deltagare` : '';
 
-    const text = `Möte om 15 min: ${event.summary || 'Möte'} kl ${tid}${plats}`;
+    const text = `Möte om 15 min: ${event.summary || 'Möte'} — ${datum} kl ${tid}${plats}`;
     await sendSMS(text);
     console.log('Mötespåminnelse skickad:', event.summary);
   }
